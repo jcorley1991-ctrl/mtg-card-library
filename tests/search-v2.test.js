@@ -1,0 +1,5 @@
+import test from"node:test";import assert from"node:assert/strict";import{normalizeFriendlySearch,filterCards}from"../src/core/search-v2.js";import{seedCards}from"../src/core/data.js";
+test("v2 recognizes full color vocabulary",()=>{assert.equal(normalizeFriendlySearch("five-color draw").normalized,'id=WUBRG o:"draw"');assert.equal(normalizeFriendlySearch("colorless mana rock").normalized,'id=c t:artifact o:"add"')});
+test("v2 recognizes extended player terminology",()=>{const x=normalizeFriendlySearch("graveyard hate");assert.equal(x.applied[0].term,"graveyard hate");assert.match(x.normalized,/graveyard/)});
+test("v2 colorless structured filter works",()=>{const r=filterCards(seedCards,{color:"colorless",rarity:"any",set:"any"});assert.deepEqual(r.map(x=>x.name),["Sol Ring"])});
+test("v2 exact guild identity search works",()=>{const n=normalizeFriendlySearch("Orzhov removal"),r=filterCards(seedCards,{friendly:n,color:"any",rarity:"any",set:"any"});assert.deepEqual(r.map(x=>x.name),["Vindicate"])});
