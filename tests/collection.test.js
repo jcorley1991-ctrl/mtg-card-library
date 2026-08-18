@@ -1,0 +1,1 @@
+import test from"node:test";import assert from"node:assert/strict";import{setQuantity}from"../src/core/collection.js";test("collection quantity cannot become negative",()=>{assert.equal(setQuantity({quantity:4},-9).quantity,0)});test("collection quantity is integer",()=>{assert.equal(setQuantity({quantity:1},3.8).quantity,3)});

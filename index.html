@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#151319">
+  <title>MTG Card Library</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><p class="eyebrow">MTG CARD LIBRARY</p><h1>Search. Collect. Build. Buy smarter.</h1></div>
+    <div class="top-stats"><span id="ownedCount">0 cards owned</span><span id="collectionValue">$0.00 collection</span></div>
+  </header>
+  <nav id="nav" class="nav" aria-label="Primary"></nav>
+  <main>
+    <section id="search" class="page active"></section><section id="collection" class="page"></section><section id="sets" class="page"></section><section id="decks" class="page"></section><section id="buy" class="page"></section><section id="pricing" class="page"></section><section id="import" class="page"></section><section id="scanner" class="page"></section><section id="settings" class="page"></section>
+  </main>
+  <template id="cardTemplate"><article class="card"><div class="card-image-wrap"><img class="card-image" alt=""></div><div class="card-body"><div class="card-title-row"><h3 class="card-name"></h3><span class="rarity"></span></div><p class="type-line"></p><p class="oracle"></p><div class="chips"></div><div class="card-footer"><strong class="price"></strong><div class="card-actions"><button data-action="add-collection">+ Collection</button><button data-action="add-deck">+ Deck</button><button data-action="add-buy">+ Buy List</button></div></div></div></article></template>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>

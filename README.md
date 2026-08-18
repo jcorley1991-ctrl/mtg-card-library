@@ -1,26 +1,40 @@
 # MTG Card Library
 
-A searchable Magic: The Gathering card catalog, collection manager, deck builder, set tracker, pricing dashboard, wishlist/buylist system, and purchase-planning tool.
+A searchable Magic: The Gathering card catalog, collection manager, set tracker, deck builder, pricing dashboard, wishlist/buy-list system, and purchase-planning tool.
 
-## Project status
+## Current state
 
-The repository has been initialized with a research-backed product specification. Implementation must follow `docs/MASTER_SPEC.md` as the current Source of Truth.
+Phase 1 foundation is implemented as a dependency-free responsive web application so the product can be exercised before long-term framework, database, hosting, authentication, or cloud-sync choices are locked.
 
-## Core product areas
+Run locally with any static file server. Logic verification uses Node 22:
 
-- **Search** — deep structured search plus friendly terminology and natural-language aliases.
-- **Collection** — exact-printing inventory, quantities, condition, finish, language, storage location, acquisition data, tags, and value tracking.
-- **Sets** — browse every set/printing and track set completion and missing cards.
-- **Decks** — build and save decks, validate legality, match against owned cards, calculate missing cards, and track deck value.
-- **Buy Lists** — turn missing cards into persistent purchase lists with printing choices, quantities, prices, and marketplace links.
-- **Pricing** — retail/buylist pricing, normal/foil/etched support where available, and price history.
-- **Import / Export** — portable CSV/text backups and migration from other card-management tools.
-- **Scanner** — camera-assisted card entry is a required planned capability after the core catalog and collection workflow is stable.
+```bash
+npm test
+npm run build
+```
+
+## Implemented Phase 1 behavior
+
+- Deep catalog search across name/text/type/set/collector information in the development catalog.
+- Friendly MTG terminology normalization, including guild/shard/wedge color names and common gameplay terms.
+- Color, rarity, set, and maximum-price filters.
+- Exact-printing collection inventory with quantity safety and value calculation.
+- Set completion tracking and one-click add-missing-set-cards to Buy List.
+- Saved deck foundation with exact-printing vs alternate-printing ownership matching.
+- One-click add-all-missing-deck-cards to Buy List.
+- Persistent browser-local collection, deck, and buy-list state.
+- Collection/deck/buy-list pricing summaries with unknown-price handling.
+- JSON backup/import and collection CSV export.
+- Scanner and provider-sync areas preserved as explicit planned modules rather than silently omitted.
+- Automated Node tests and GitHub Actions CI.
 
 ## Data strategy
 
-The project will use a provider abstraction rather than hard-wiring the application to one external service. Scryfall-compatible identifiers/search semantics and MTGJSON printings/pricing data are the initial research-backed sources. Bulk/local indexing is preferred for catalog-scale operations.
+The production catalog will use a provider abstraction rather than hard-wiring user data to one external service. Scryfall-compatible identifiers/search semantics and MTGJSON-compatible printing/pricing data are the initial research-backed sources. Bulk/local indexing is the required direction for catalog-scale operations.
+
+Development seed prices and cards are placeholders only. They are deliberately labeled as such in the interface until real provider synchronization is connected.
 
 ## Source of Truth
 
-See [`docs/MASTER_SPEC.md`](docs/MASTER_SPEC.md).
+- [`docs/MASTER_SPEC.md`](docs/MASTER_SPEC.md) — authoritative product requirements.
+- [`docs/PHASE1_IMPLEMENTATION.md`](docs/PHASE1_IMPLEMENTATION.md) — active Phase 1 acceptance criteria, subordinate to the master spec.
