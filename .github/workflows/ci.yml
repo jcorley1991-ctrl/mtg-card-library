@@ -18,6 +18,7 @@ jobs:
           cp packaging/START-MTG-CARD-LIBRARY.bat dist/
           cp packaging/mtg-server.ps1 dist/
           cp packaging/README-WINDOWS.txt dist/
+          cp packaging/VERSION.txt dist/
           cd dist
           zip -r ../MTG-Card-Library-Windows.zip .
       - name: Upload Windows package
