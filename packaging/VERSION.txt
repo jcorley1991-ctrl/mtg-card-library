@@ -1,0 +1,7 @@
+MTG Card Library
+Package: Windows portable web build
+Project state: Phase 1 v2
+Package source checkpoint: 57c169b9ce066259acb47f3fd2bf83b30faecf69
+Date: 2026-08-18
+
+This file identifies the source checkpoint used to verify the downloadable Windows package. It does not change the authoritative requirements in docs/MASTER_SPEC.md.
