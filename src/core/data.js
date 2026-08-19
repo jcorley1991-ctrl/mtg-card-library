@@ -1,43 +1,45 @@
+const scryfallImage=(setCode,collectorNumber)=>`https://api.scryfall.com/cards/${setCode.toLowerCase()}/${encodeURIComponent(collectorNumber)}?format=image&version=normal`;
+
 export const seedCards = [
   {
     id:"c1", oracleId:"o1", name:"Swords to Plowshares", setCode:"STA", setName:"Strixhaven Mystical Archive", collectorNumber:"10",
-    colors:["W"], colorIdentity:["W"], rarity:"uncommon", manaValue:1, manaCost:"{W}", typeLine:"Instant",
+    colors:["W"], colorIdentity:["W"], rarity:"rare", manaValue:1, manaCost:"{W}", typeLine:"Instant",
     oracleText:"Exile target creature. Its controller gains life equal to its power.",
     keywords:[], legalities:{commander:"legal",modern:"not_legal",legacy:"legal"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:2.15,usdFoil:3.10,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/2/9/29f0f07b-f2fb-4a7a-a9f0-d792ace00d85.jpg"
+    language:"en", prices:{usd:2.15,usdFoil:3.10,usdEtched:null}, image:scryfallImage("STA","10")
   },
   {
-    id:"c2", oracleId:"o2", name:"Sol Ring", setCode:"CMM", setName:"Commander Masters", collectorNumber:"396",
+    id:"c2", oracleId:"o2", name:"Sol Ring", setCode:"CMM", setName:"Commander Masters", collectorNumber:"410",
     colors:[], colorIdentity:[], rarity:"uncommon", manaValue:1, manaCost:"{1}", typeLine:"Artifact",
     oracleText:"{T}: Add {C}{C}.", keywords:[], legalities:{commander:"legal",modern:"not_legal",legacy:"legal"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:1.35,usdFoil:2.20,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/8/8/881e6e02-06f3-47b8-88aa-9aa5daa1e83b.jpg"
+    language:"en", prices:{usd:1.35,usdFoil:2.20,usdEtched:null}, image:scryfallImage("CMM","410")
   },
   {
     id:"c3", oracleId:"o3", name:"Vindicate", setCode:"MH2", setName:"Modern Horizons 2", collectorNumber:"322",
     colors:["W","B"], colorIdentity:["W","B"], rarity:"rare", manaValue:3, manaCost:"{1}{W}{B}", typeLine:"Sorcery",
     oracleText:"Destroy target permanent.", keywords:[], legalities:{commander:"legal",modern:"legal",legacy:"legal"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:0.72,usdFoil:1.40,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/8/1/81a54228-17de-4e7d-b1f9-d8f560b60d06.jpg"
+    language:"en", prices:{usd:0.72,usdFoil:1.40,usdEtched:null}, image:scryfallImage("MH2","322")
   },
   {
     id:"c4", oracleId:"o4", name:"Grim Guardian", setCode:"JOU", setName:"Journey into Nyx", collectorNumber:"73",
     colors:["B"], colorIdentity:["B"], rarity:"common", manaValue:3, manaCost:"{2}{B}", typeLine:"Enchantment Creature — Zombie",
     oracleText:"Constellation — Whenever Grim Guardian or another enchantment enters the battlefield under your control, each opponent loses 1 life.",
     keywords:["Constellation"], legalities:{commander:"legal",modern:"legal",legacy:"legal"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:0.24,usdFoil:0.85,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/2/9/29e7dc60-cec7-47ee-9032-53fa74a613a3.jpg"
+    language:"en", prices:{usd:0.24,usdFoil:0.85,usdEtched:null}, image:scryfallImage("JOU","73")
   },
   {
     id:"c5", oracleId:"o5", name:"Demonic Tutor", setCode:"STA", setName:"Strixhaven Mystical Archive", collectorNumber:"27",
     colors:["B"], colorIdentity:["B"], rarity:"mythic", manaValue:2, manaCost:"{1}{B}", typeLine:"Sorcery",
     oracleText:"Search your library for a card, put that card into your hand, then shuffle.",
-    keywords:[], legalities:{commander:"legal",modern:"not_legal",legacy:"restricted"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:34.50,usdFoil:44.00,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/5/6/56f59f1f-1b22-41f4-9f94-4c0d3bf9782b.jpg"
+    keywords:[], legalities:{commander:"legal",modern:"not_legal",legacy:"banned",vintage:"restricted"}, finishes:["nonfoil","foil","etched"],
+    language:"en", prices:{usd:34.50,usdFoil:44.00,usdEtched:null}, image:scryfallImage("STA","27")
   },
   {
     id:"c6", oracleId:"o6", name:"Rhystic Study", setCode:"WOT", setName:"Wilds of Eldraine: Enchanting Tales", collectorNumber:"25",
     colors:["U"], colorIdentity:["U"], rarity:"mythic", manaValue:3, manaCost:"{2}{U}", typeLine:"Enchantment",
     oracleText:"Whenever an opponent casts a spell, you may draw a card unless that player pays {1}.",
     keywords:[], legalities:{commander:"legal",modern:"not_legal",legacy:"legal"}, finishes:["nonfoil","foil"],
-    language:"en", prices:{usd:34.10,usdFoil:39.00,usdEtched:null}, image:"https://cards.scryfall.io/normal/front/0/2/02593f3e-0354-4d45-8d9b-221507aa8923.jpg"
+    language:"en", prices:{usd:34.10,usdFoil:39.00,usdEtched:null}, image:scryfallImage("WOT","25")
   }
 ];
 
