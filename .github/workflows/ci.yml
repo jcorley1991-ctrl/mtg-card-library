@@ -27,3 +27,38 @@ jobs:
           name: MTG-Card-Library-Windows
           path: MTG-Card-Library-Windows.zip
           if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npm run build
+      - name: Copy verified web build into Android assets
+        run: |
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -R dist/. android/app/src/main/assets/www/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.5.0'
+      - name: Build Android APK
+        run: gradle -p android :app:assembleDebug --stacktrace
+      - name: Name APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk MTG-Card-Library-Android.apk
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MTG-Card-Library-Android
+          path: MTG-Card-Library-Android.apk
+          if-no-files-found: error
