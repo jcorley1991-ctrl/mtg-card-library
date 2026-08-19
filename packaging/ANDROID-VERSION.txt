@@ -1,0 +1,9 @@
+MTG Card Library Android APK
+Application ID: com.jcorley.mtgcardlibrary
+Target SDK: 36
+Minimum SDK: 24
+Build type: debug/test
+Verification branch marker: agent/verify-android-apk
+Date: 2026-08-18
+
+This file identifies the Android package verification checkpoint and does not supersede docs/MASTER_SPEC.md.
