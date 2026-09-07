@@ -15,13 +15,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class ScryfallClient {
     private static final String BASE = "https://api.scryfall.com";
     private static final int MAX_ARTWORK_CANDIDATES = 60;
+    private static final int ARTWORK_WORKERS = 8;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final ExecutorService artworkExecutor = Executors.newFixedThreadPool(ARTWORK_WORKERS);
 
     public interface ResolveCallback {
         void onResolved(ScryfallCard card, RecognitionConfidence confidence);
@@ -57,23 +63,31 @@ public class ScryfallClient {
                 }
 
                 Bitmap cameraArtwork = CardCropper.artworkRegion(centeredCard);
-                ScryfallCard best = null;
-                double bestScore = -1.0;
-                int checked = 0;
+                CompletionService<ScoredCandidate> completion = new ExecutorCompletionService<>(artworkExecutor);
+                int submitted = 0;
 
                 for (ScryfallCard candidate : printings) {
-                    if (checked++ >= MAX_ARTWORK_CANDIDATES) break;
+                    if (submitted >= MAX_ARTWORK_CANDIDATES) break;
                     String comparisonUrl = candidate.artworkUrl != null ? candidate.artworkUrl : candidate.imageUrl;
                     if (comparisonUrl == null) continue;
-                    Bitmap candidateImage = SimpleImageLoader.download(comparisonUrl);
-                    if (candidateImage == null) continue;
-                    Bitmap candidateArtwork = candidate.artworkUrl != null
-                            ? candidateImage
-                            : CardCropper.artworkRegion(candidateImage);
-                    double score = ArtworkMatcher.similarity(cameraArtwork, candidateArtwork);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        best = candidate;
+
+                    completion.submit(() -> scoreCandidate(cameraArtwork, candidate, comparisonUrl));
+                    submitted++;
+                }
+
+                ScryfallCard best = null;
+                double bestScore = -1.0;
+
+                for (int i = 0; i < submitted; i++) {
+                    try {
+                        Future<ScoredCandidate> future = completion.take();
+                        ScoredCandidate scored = future.get();
+                        if (scored != null && scored.score > bestScore) {
+                            bestScore = scored.score;
+                            best = scored.card;
+                        }
+                    } catch (Exception ignored) {
+                        // One image comparison failing should not abort the scan.
                     }
                 }
 
@@ -86,6 +100,17 @@ public class ScryfallClient {
                 callback.onFailure("Card lookup failed: " + safeMessage(e));
             }
         });
+    }
+
+    private ScoredCandidate scoreCandidate(Bitmap cameraArtwork, ScryfallCard candidate, String comparisonUrl) {
+        Bitmap candidateImage = SimpleImageLoader.download(comparisonUrl);
+        if (candidateImage == null) return null;
+
+        Bitmap candidateArtwork = candidate.artworkUrl != null
+                ? candidateImage
+                : CardCropper.artworkRegion(candidateImage);
+        double score = ArtworkMatcher.similarity(cameraArtwork, candidateArtwork);
+        return new ScoredCandidate(candidate, score);
     }
 
     private ScryfallCard getBySetCollector(String set, String collector, String lang) {
@@ -233,5 +258,16 @@ public class ScryfallClient {
 
     public void close() {
         executor.shutdownNow();
+        artworkExecutor.shutdownNow();
+    }
+
+    private static final class ScoredCandidate {
+        final ScryfallCard card;
+        final double score;
+
+        ScoredCandidate(ScryfallCard card, double score) {
+            this.card = card;
+            this.score = score;
+        }
     }
 }
