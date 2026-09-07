@@ -7,13 +7,15 @@ public final class ArtworkMatcher {
     private ArtworkMatcher() {}
 
     public static double similarity(Bitmap cameraArtwork, Bitmap candidateCardImage) {
-        long a = averageHash(cameraArtwork);
-        long b = averageHash(candidateCardImage);
+        return similarity(hash(cameraArtwork), hash(candidateCardImage));
+    }
+
+    public static double similarity(long a, long b) {
         int distance = Long.bitCount(a ^ b);
         return 1.0 - (distance / 64.0);
     }
 
-    private static long averageHash(Bitmap source) {
+    public static long hash(Bitmap source) {
         Bitmap scaled = Bitmap.createScaledBitmap(source, 8, 8, true);
         int[] gray = new int[64];
         long total = 0;
