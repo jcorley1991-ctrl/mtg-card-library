@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -104,6 +105,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
     @Override
     public void onCardRecognized(ScryfallCard card, RecognitionConfidence confidence) {
         runOnUiThread(() -> {
+            flashScanConfirmed();
             resultPanel.setVisibility(View.VISIBLE);
             cardName.setText(card.name);
 
@@ -139,6 +141,27 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
                 SimpleImageLoader.load(card.imageUrl, bitmap -> runOnUiThread(() -> cardImage.setImageBitmap(bitmap)));
             }
         });
+    }
+
+    private void flashScanConfirmed() {
+        ViewGroup root = findViewById(android.R.id.content);
+        View flash = new View(this);
+        flash.setBackgroundColor(0xFFFFFFFF);
+        flash.setAlpha(0f);
+        root.addView(flash, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        flash.animate()
+                .alpha(0.78f)
+                .setDuration(70L)
+                .withEndAction(() -> flash.animate()
+                        .alpha(0f)
+                        .setDuration(130L)
+                        .withEndAction(() -> root.removeView(flash))
+                        .start())
+                .start();
     }
 
     private String capitalize(String value) {
