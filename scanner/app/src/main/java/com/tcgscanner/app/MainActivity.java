@@ -1,10 +1,12 @@
 package com.tcgscanner.app;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -36,9 +38,12 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
     private TextView cardMeta;
     private TextView cardPrice;
     private TextView cardOracle;
+    private Button catalogButton;
 
     private ExecutorService cameraExecutor;
+    private ExecutorService catalogExecutor;
     private MtgCardAnalyzer analyzer;
+    private CatalogDatabase catalogDatabase;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,9 +58,15 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
         cardMeta = findViewById(R.id.cardMeta);
         cardPrice = findViewById(R.id.cardPrice);
         cardOracle = findViewById(R.id.cardOracle);
+        catalogButton = findViewById(R.id.catalogButton);
 
         cameraExecutor = Executors.newSingleThreadExecutor();
+        catalogExecutor = Executors.newSingleThreadExecutor();
         analyzer = new MtgCardAnalyzer(this);
+        catalogDatabase = new CatalogDatabase(getApplicationContext());
+
+        catalogButton.setOnClickListener(v -> startActivity(new Intent(this, CatalogActivity.class)));
+        refreshCatalogCount();
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED) {
@@ -67,6 +78,12 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
                     CAMERA_PERMISSION_REQUEST
             );
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (catalogDatabase != null && catalogExecutor != null) refreshCatalogCount();
     }
 
     private void startCamera() {
@@ -104,6 +121,8 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
 
     @Override
     public void onCardRecognized(ScryfallCard card, RecognitionConfidence confidence) {
+        saveScanInBackground(card, confidence);
+
         runOnUiThread(() -> {
             flashScanConfirmed();
             resultPanel.setVisibility(View.VISIBLE);
@@ -118,7 +137,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
                     confidenceText = "Exact printing selected by artwork match";
                     break;
                 default:
-                    confidenceText = "Printing not yet verified; rescan for set/collector details";
+                    confidenceText = "Printing not yet verified; saved as unverified";
                     break;
             }
 
@@ -140,6 +159,24 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
             if (card.imageUrl != null) {
                 SimpleImageLoader.load(card.imageUrl, bitmap -> runOnUiThread(() -> cardImage.setImageBitmap(bitmap)));
             }
+        });
+    }
+
+    private void saveScanInBackground(ScryfallCard card, RecognitionConfidence confidence) {
+        catalogExecutor.execute(() -> {
+            try {
+                CatalogDatabase.SaveResult saved = catalogDatabase.saveScan(card, confidence);
+                runOnUiThread(() -> catalogButton.setText("Catalog • " + saved.totalCards));
+            } catch (Exception e) {
+                onStatus("Card recognized, but catalog save failed: " + e.getMessage());
+            }
+        });
+    }
+
+    private void refreshCatalogCount() {
+        catalogExecutor.execute(() -> {
+            int total = catalogDatabase.getTotalCount();
+            runOnUiThread(() -> catalogButton.setText("Catalog • " + total));
         });
     }
 
@@ -189,7 +226,9 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
     @Override
     protected void onDestroy() {
         if (analyzer != null) analyzer.close();
-        if (cameraExecutor != null) cameraExecutor.shutdown();
+        if (cameraExecutor != null) cameraExecutor.shutdownNow();
+        if (catalogExecutor != null) catalogExecutor.shutdownNow();
+        if (catalogDatabase != null) catalogDatabase.close();
         super.onDestroy();
     }
 }
