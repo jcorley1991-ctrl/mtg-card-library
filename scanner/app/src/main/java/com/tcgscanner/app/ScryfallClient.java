@@ -13,9 +13,11 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletionService;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -28,6 +30,10 @@ public class ScryfallClient {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ExecutorService artworkExecutor = Executors.newFixedThreadPool(ARTWORK_WORKERS);
+    private final ConcurrentHashMap<String, ScryfallCard> exactCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ScryfallCard> fuzzyCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<ScryfallCard>> printingsCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Long> artworkHashCache = new ConcurrentHashMap<>();
 
     public interface ResolveCallback {
         void onResolved(ScryfallCard card, RecognitionConfidence confidence);
@@ -62,7 +68,7 @@ public class ScryfallClient {
                     return;
                 }
 
-                Bitmap cameraArtwork = CardCropper.artworkRegion(centeredCard);
+                long cameraArtworkHash = ArtworkMatcher.hash(CardCropper.artworkRegion(centeredCard));
                 CompletionService<ScoredCandidate> completion = new ExecutorCompletionService<>(artworkExecutor);
                 int submitted = 0;
 
@@ -71,7 +77,7 @@ public class ScryfallClient {
                     String comparisonUrl = candidate.artworkUrl != null ? candidate.artworkUrl : candidate.imageUrl;
                     if (comparisonUrl == null) continue;
 
-                    completion.submit(() -> scoreCandidate(cameraArtwork, candidate, comparisonUrl));
+                    completion.submit(() -> scoreCandidate(cameraArtworkHash, candidate, comparisonUrl));
                     submitted++;
                 }
 
@@ -102,52 +108,76 @@ public class ScryfallClient {
         });
     }
 
-    private ScoredCandidate scoreCandidate(Bitmap cameraArtwork, ScryfallCard candidate, String comparisonUrl) {
-        Bitmap candidateImage = SimpleImageLoader.download(comparisonUrl);
-        if (candidateImage == null) return null;
+    private ScoredCandidate scoreCandidate(long cameraArtworkHash, ScryfallCard candidate, String comparisonUrl) {
+        Long candidateHash = artworkHashCache.get(comparisonUrl);
+        if (candidateHash == null) {
+            Bitmap candidateImage = SimpleImageLoader.download(comparisonUrl);
+            if (candidateImage == null) return null;
 
-        Bitmap candidateArtwork = candidate.artworkUrl != null
-                ? candidateImage
-                : CardCropper.artworkRegion(candidateImage);
-        double score = ArtworkMatcher.similarity(cameraArtwork, candidateArtwork);
+            Bitmap candidateArtwork = candidate.artworkUrl != null
+                    ? candidateImage
+                    : CardCropper.artworkRegion(candidateImage);
+            candidateHash = ArtworkMatcher.hash(candidateArtwork);
+            artworkHashCache.put(comparisonUrl, candidateHash);
+        }
+
+        double score = ArtworkMatcher.similarity(cameraArtworkHash, candidateHash);
         return new ScoredCandidate(candidate, score);
     }
 
     private ScryfallCard getBySetCollector(String set, String collector, String lang) {
+        String cacheKey = set.toLowerCase(Locale.US) + "|" + collector + "|" + (lang == null ? "en" : lang.toLowerCase(Locale.US));
+        ScryfallCard cached = exactCache.get(cacheKey);
+        if (cached != null) return cached;
+
         try {
             String url = BASE + "/cards/" + encPath(set.toLowerCase(Locale.US)) + "/" + encPath(collector);
             if (lang != null && !lang.isEmpty() && !"en".equalsIgnoreCase(lang)) {
                 url += "/" + encPath(lang.toLowerCase(Locale.US));
             }
-            JSONObject json = getJson(url);
-            return parseCard(json);
+            ScryfallCard card = parseCard(getJson(url));
+            if (card != null) exactCache.put(cacheKey, card);
+            return card;
         } catch (Exception ignored) {
             return null;
         }
     }
 
     private ScryfallCard getByFuzzyName(String name) {
+        String cacheKey = name.trim().toLowerCase(Locale.US);
+        ScryfallCard cached = fuzzyCache.get(cacheKey);
+        if (cached != null) return cached;
+
         try {
             String url = BASE + "/cards/named?fuzzy=" + encQuery(name);
-            return parseCard(getJson(url));
+            ScryfallCard card = parseCard(getJson(url));
+            if (card != null) fuzzyCache.put(cacheKey, card);
+            return card;
         } catch (Exception ignored) {
             return null;
         }
     }
 
     private List<ScryfallCard> searchPrintings(String exactName) throws Exception {
+        String cacheKey = exactName.trim().toLowerCase(Locale.US);
+        List<ScryfallCard> cached = printingsCache.get(cacheKey);
+        if (cached != null) return cached;
+
         String query = "!\"" + exactName.replace("\"", "") + "\"";
         String url = BASE + "/cards/search?q=" + encQuery(query)
                 + "&unique=prints&include_multilingual=true&include_variations=true";
         JSONObject root = getJson(url);
         JSONArray data = root.optJSONArray("data");
         List<ScryfallCard> cards = new ArrayList<>();
-        if (data == null) return cards;
-        for (int i = 0; i < data.length(); i++) {
-            ScryfallCard card = parseCard(data.optJSONObject(i));
-            if (card != null) cards.add(card);
+        if (data != null) {
+            for (int i = 0; i < data.length(); i++) {
+                ScryfallCard card = parseCard(data.optJSONObject(i));
+                if (card != null) cards.add(card);
+            }
         }
-        return cards;
+        List<ScryfallCard> result = Collections.unmodifiableList(cards);
+        printingsCache.put(cacheKey, result);
+        return result;
     }
 
     private JSONObject getJson(String urlString) throws Exception {
