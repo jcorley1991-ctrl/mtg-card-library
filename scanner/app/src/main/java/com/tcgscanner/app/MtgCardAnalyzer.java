@@ -14,7 +14,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MtgCardAnalyzer implements ImageAnalysis.Analyzer {
-    private static final long ANALYSIS_INTERVAL_MS = 1200L;
+    private static final long ANALYSIS_INTERVAL_MS = 350L;
 
     public interface Listener {
         void onStatus(String message);
