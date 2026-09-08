@@ -67,12 +67,37 @@ public class MtgCardAnalyzer implements ImageAnalysis.Analyzer {
                 .addOnSuccessListener(text -> {
                     OcrCardData metadataOcr = OcrCardParser.parse(text.getText());
                     if (metadataOcr.hasExactPrintingKeys()) {
-                        resolveCandidate(metadataOcr, centeredCard);
+                        if (!cardGapObserved && appearsToBeLastCard(metadataOcr)) {
+                            busy.set(false);
+                            return;
+                        }
+                        validateMetadataWithName(metadataOcr, centeredCard);
                     } else {
                         processFullCard(centeredCard);
                     }
                 })
                 .addOnFailureListener(e -> processFullCard(centeredCard));
+    }
+
+    private void validateMetadataWithName(OcrCardData metadataOcr, Bitmap centeredCard) {
+        Bitmap nameRegion = CardCropper.nameRegion(centeredCard);
+        recognizer.process(InputImage.fromBitmap(nameRegion, 0))
+                .addOnSuccessListener(text -> {
+                    OcrCardData nameOcr = OcrCardParser.parse(text.getText());
+                    if (nameOcr.nameCandidate != null) {
+                        OcrCardData combined = new OcrCardData(
+                                nameOcr.nameCandidate,
+                                metadataOcr.setCode,
+                                metadataOcr.collectorNumber,
+                                metadataOcr.language,
+                                metadataOcr.rawText + "\n" + text.getText()
+                        );
+                        resolveCandidate(combined, centeredCard);
+                    } else {
+                        resolveCandidate(metadataOcr, centeredCard);
+                    }
+                })
+                .addOnFailureListener(e -> resolveCandidate(metadataOcr, centeredCard));
     }
 
     private void processFullCard(Bitmap centeredCard) {
