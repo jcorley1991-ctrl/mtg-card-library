@@ -33,6 +33,7 @@ public class ScryfallClient {
     private final ConcurrentHashMap<String, ScryfallCard> exactCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ScryfallCard> fuzzyCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<ScryfallCard>> printingsCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<ScryfallCard>> numberCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Long> artworkHashCache = new ConcurrentHashMap<>();
 
     public interface ResolveCallback {
@@ -45,7 +46,7 @@ public class ScryfallClient {
             try {
                 if (ocr.hasExactPrintingKeys()) {
                     ScryfallCard exact = getBySetCollector(ocr.setCode, ocr.collectorNumber, ocr.language);
-                    if (exact != null) {
+                    if (exact != null && (ocr.nameCandidate == null || nameMatches(exact.name, ocr.nameCandidate))) {
                         callback.onResolved(exact, RecognitionConfidence.EXACT_METADATA);
                         return;
                     }
@@ -62,43 +63,33 @@ public class ScryfallClient {
                     return;
                 }
 
+                // If OCR has the collector number but the set code was missed or suspicious,
+                // narrow to only printings with this exact name + collector number first.
+                // This is much faster and safer than comparing every printing of the card.
+                if (ocr.collectorNumber != null && !ocr.collectorNumber.trim().isEmpty()) {
+                    List<ScryfallCard> numbered = searchByNameCollector(named.name, ocr.collectorNumber);
+                    if (numbered.size() == 1) {
+                        callback.onResolved(numbered.get(0), RecognitionConfidence.EXACT_METADATA);
+                        return;
+                    }
+                    if (!numbered.isEmpty()) {
+                        ScoredCandidate bestNumbered = bestArtworkMatch(centeredCard, numbered, numbered.size());
+                        if (bestNumbered != null && bestNumbered.score >= 0.62) {
+                            callback.onResolved(bestNumbered.card, RecognitionConfidence.ARTWORK_MATCH);
+                            return;
+                        }
+                    }
+                }
+
                 List<ScryfallCard> printings = searchPrintings(named.name);
                 if (printings.isEmpty()) {
                     callback.onResolved(named, RecognitionConfidence.NAME_ONLY);
                     return;
                 }
 
-                long cameraArtworkHash = ArtworkMatcher.hash(CardCropper.artworkRegion(centeredCard));
-                CompletionService<ScoredCandidate> completion = new ExecutorCompletionService<>(artworkExecutor);
-                int submitted = 0;
-
-                for (ScryfallCard candidate : printings) {
-                    if (submitted >= MAX_ARTWORK_CANDIDATES) break;
-                    String comparisonUrl = candidate.artworkUrl != null ? candidate.artworkUrl : candidate.imageUrl;
-                    if (comparisonUrl == null) continue;
-
-                    completion.submit(() -> scoreCandidate(cameraArtworkHash, candidate, comparisonUrl));
-                    submitted++;
-                }
-
-                ScryfallCard best = null;
-                double bestScore = -1.0;
-
-                for (int i = 0; i < submitted; i++) {
-                    try {
-                        Future<ScoredCandidate> future = completion.take();
-                        ScoredCandidate scored = future.get();
-                        if (scored != null && scored.score > bestScore) {
-                            bestScore = scored.score;
-                            best = scored.card;
-                        }
-                    } catch (Exception ignored) {
-                        // One image comparison failing should not abort the scan.
-                    }
-                }
-
-                if (best != null && bestScore >= 0.62) {
-                    callback.onResolved(best, RecognitionConfidence.ARTWORK_MATCH);
+                ScoredCandidate best = bestArtworkMatch(centeredCard, printings, MAX_ARTWORK_CANDIDATES);
+                if (best != null && best.score >= 0.62) {
+                    callback.onResolved(best.card, RecognitionConfidence.ARTWORK_MATCH);
                 } else {
                     callback.onResolved(named, RecognitionConfidence.NAME_ONLY);
                 }
@@ -108,12 +99,39 @@ public class ScryfallClient {
         });
     }
 
+    private ScoredCandidate bestArtworkMatch(Bitmap centeredCard, List<ScryfallCard> candidates, int limit) {
+        long cameraArtworkHash = ArtworkMatcher.hash(CardCropper.artworkRegion(centeredCard));
+        CompletionService<ScoredCandidate> completion = new ExecutorCompletionService<>(artworkExecutor);
+        int submitted = 0;
+
+        for (ScryfallCard candidate : candidates) {
+            if (submitted >= limit) break;
+            String comparisonUrl = candidate.artworkUrl != null ? candidate.artworkUrl : candidate.imageUrl;
+            if (comparisonUrl == null) continue;
+            completion.submit(() -> scoreCandidate(cameraArtworkHash, candidate, comparisonUrl));
+            submitted++;
+        }
+
+        ScoredCandidate best = null;
+        for (int i = 0; i < submitted; i++) {
+            try {
+                Future<ScoredCandidate> future = completion.take();
+                ScoredCandidate scored = future.get();
+                if (scored != null && (best == null || scored.score > best.score)) {
+                    best = scored;
+                }
+            } catch (Exception ignored) {
+                // A failed candidate image should not abort the scan.
+            }
+        }
+        return best;
+    }
+
     private ScoredCandidate scoreCandidate(long cameraArtworkHash, ScryfallCard candidate, String comparisonUrl) {
         Long candidateHash = artworkHashCache.get(comparisonUrl);
         if (candidateHash == null) {
             Bitmap candidateImage = SimpleImageLoader.download(comparisonUrl);
             if (candidateImage == null) return null;
-
             Bitmap candidateArtwork = candidate.artworkUrl != null
                     ? candidateImage
                     : CardCropper.artworkRegion(candidateImage);
@@ -126,7 +144,8 @@ public class ScryfallClient {
     }
 
     private ScryfallCard getBySetCollector(String set, String collector, String lang) {
-        String cacheKey = set.toLowerCase(Locale.US) + "|" + collector + "|" + (lang == null ? "en" : lang.toLowerCase(Locale.US));
+        String cacheKey = set.toLowerCase(Locale.US) + "|" + collector + "|"
+                + (lang == null ? "en" : lang.toLowerCase(Locale.US));
         ScryfallCard cached = exactCache.get(cacheKey);
         if (cached != null) return cached;
 
@@ -158,12 +177,29 @@ public class ScryfallClient {
         }
     }
 
+    private List<ScryfallCard> searchByNameCollector(String exactName, String collector) throws Exception {
+        String cacheKey = exactName.trim().toLowerCase(Locale.US) + "|" + collector.toLowerCase(Locale.US);
+        List<ScryfallCard> cached = numberCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        String query = "!\"" + exactName.replace("\"", "") + "\" cn:" + collector;
+        List<ScryfallCard> result = searchCards(query);
+        numberCache.put(cacheKey, result);
+        return result;
+    }
+
     private List<ScryfallCard> searchPrintings(String exactName) throws Exception {
         String cacheKey = exactName.trim().toLowerCase(Locale.US);
         List<ScryfallCard> cached = printingsCache.get(cacheKey);
         if (cached != null) return cached;
 
         String query = "!\"" + exactName.replace("\"", "") + "\"";
+        List<ScryfallCard> result = searchCards(query);
+        printingsCache.put(cacheKey, result);
+        return result;
+    }
+
+    private List<ScryfallCard> searchCards(String query) throws Exception {
         String url = BASE + "/cards/search?q=" + encQuery(query)
                 + "&unique=prints&include_multilingual=true&include_variations=true";
         JSONObject root = getJson(url);
@@ -175,9 +211,25 @@ public class ScryfallClient {
                 if (card != null) cards.add(card);
             }
         }
-        List<ScryfallCard> result = Collections.unmodifiableList(cards);
-        printingsCache.put(cacheKey, result);
-        return result;
+        return Collections.unmodifiableList(cards);
+    }
+
+    private static boolean nameMatches(String actualName, String ocrName) {
+        String actual = normalizeName(actualName);
+        String observed = normalizeName(ocrName);
+        if (actual.equals(observed)) return true;
+        int split = actual.indexOf("//");
+        if (split > 0 && actual.substring(0, split).trim().equals(observed)) return true;
+        return actual.contains(observed) || observed.contains(actual);
+    }
+
+    private static String normalizeName(String value) {
+        if (value == null) return "";
+        return value.toLowerCase(Locale.US)
+                .replace('’', '\'')
+                .replaceAll("[^a-z0-9'/ ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private JSONObject getJson(String urlString) throws Exception {
