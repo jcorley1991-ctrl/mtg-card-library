@@ -3,6 +3,8 @@ package com.tcgscanner.app;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
@@ -44,6 +46,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
     private ExecutorService catalogExecutor;
     private MtgCardAnalyzer analyzer;
     private CatalogDatabase catalogDatabase;
+    private ToneGenerator scanTone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,7 +67,9 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
         catalogExecutor = Executors.newSingleThreadExecutor();
         analyzer = new MtgCardAnalyzer(this);
         catalogDatabase = new CatalogDatabase(getApplicationContext());
+        scanTone = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 75);
 
+        statusText.setText("Ready to scan");
         catalogButton.setOnClickListener(v -> startActivity(new Intent(this, CatalogActivity.class)));
         refreshCatalogCount();
 
@@ -107,7 +112,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
                         preview,
                         analysis
                 );
-                onStatus("Center one MTG card in the frame");
+                statusText.setText("Ready to scan");
             } catch (Exception e) {
                 onStatus("Camera failed: " + e.getMessage());
             }
@@ -124,6 +129,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
         saveScanInBackground(card, confidence);
 
         runOnUiThread(() -> {
+            playScanTone();
             flashScanConfirmed();
             resultPanel.setVisibility(View.VISIBLE);
             cardName.setText(card.name);
@@ -160,6 +166,12 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
                 SimpleImageLoader.load(card.imageUrl, bitmap -> runOnUiThread(() -> cardImage.setImageBitmap(bitmap)));
             }
         });
+    }
+
+    private void playScanTone() {
+        if (scanTone != null) {
+            scanTone.startTone(ToneGenerator.TONE_PROP_ACK, 85);
+        }
     }
 
     private void saveScanInBackground(ScryfallCard card, RecognitionConfidence confidence) {
@@ -208,7 +220,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
 
     @Override
     public void onRecognitionFailed(String reason) {
-        onStatus(reason);
+        // Rapid scan mode stays visually stable. Normal missed frames are silent.
     }
 
     @Override
@@ -229,6 +241,7 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
         if (cameraExecutor != null) cameraExecutor.shutdownNow();
         if (catalogExecutor != null) catalogExecutor.shutdownNow();
         if (catalogDatabase != null) catalogDatabase.close();
+        if (scanTone != null) scanTone.release();
         super.onDestroy();
     }
 }
