@@ -6,11 +6,7 @@ import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Bundle;
-import android.view.View;
-import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.ImageView;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.activity.ComponentActivity;
@@ -25,7 +21,6 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -34,12 +29,6 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
 
     private PreviewView previewView;
     private TextView statusText;
-    private ScrollView resultPanel;
-    private ImageView cardImage;
-    private TextView cardName;
-    private TextView cardMeta;
-    private TextView cardPrice;
-    private TextView cardOracle;
     private Button catalogButton;
 
     private ExecutorService cameraExecutor;
@@ -55,12 +44,6 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
 
         previewView = findViewById(R.id.previewView);
         statusText = findViewById(R.id.statusText);
-        resultPanel = findViewById(R.id.resultPanel);
-        cardImage = findViewById(R.id.cardImage);
-        cardName = findViewById(R.id.cardName);
-        cardMeta = findViewById(R.id.cardMeta);
-        cardPrice = findViewById(R.id.cardPrice);
-        cardOracle = findViewById(R.id.cardOracle);
         catalogButton = findViewById(R.id.catalogButton);
 
         cameraExecutor = Executors.newSingleThreadExecutor();
@@ -126,46 +109,10 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
 
     @Override
     public void onCardRecognized(ScryfallCard card, RecognitionConfidence confidence) {
+        // Rapid scan mode: acceptance feedback is the tone. Do not download images,
+        // render card details, or calculate display data on the scan screen.
         saveScanInBackground(card, confidence);
-
-        runOnUiThread(() -> {
-            playScanTone();
-            flashScanConfirmed();
-            resultPanel.setVisibility(View.VISIBLE);
-            cardName.setText(card.name);
-
-            String confidenceText;
-            switch (confidence) {
-                case EXACT_METADATA:
-                    confidenceText = "Exact printing verified from set + collector number";
-                    break;
-                case ARTWORK_MATCH:
-                    confidenceText = "Exact printing selected by artwork match";
-                    break;
-                default:
-                    confidenceText = "Printing not yet verified; saved as unverified";
-                    break;
-            }
-
-            String meta = card.setName + " (" + card.set.toUpperCase(Locale.US) + ")"
-                    + "  •  #" + card.collectorNumber
-                    + "\n" + capitalize(card.rarity)
-                    + "  •  " + card.lang.toUpperCase(Locale.US)
-                    + "\n" + confidenceText;
-            cardMeta.setText(meta);
-
-            String price = card.usd != null ? "$" + card.usd : "Unavailable";
-            String foilPrice = card.usdFoil != null ? "  •  Foil $" + card.usdFoil : "";
-            cardPrice.setText("Market: " + price + foilPrice + "\nScryfall fallback price");
-            cardOracle.setText(card.oracleText == null || card.oracleText.isEmpty()
-                    ? "No Oracle text returned."
-                    : card.oracleText);
-
-            cardImage.setImageDrawable(null);
-            if (card.imageUrl != null) {
-                SimpleImageLoader.load(card.imageUrl, bitmap -> runOnUiThread(() -> cardImage.setImageBitmap(bitmap)));
-            }
-        });
+        runOnUiThread(this::playScanTone);
     }
 
     private void playScanTone() {
@@ -192,35 +139,9 @@ public class MainActivity extends ComponentActivity implements MtgCardAnalyzer.L
         });
     }
 
-    private void flashScanConfirmed() {
-        ViewGroup root = findViewById(android.R.id.content);
-        View flash = new View(this);
-        flash.setBackgroundColor(0xFFFFFFFF);
-        flash.setAlpha(0f);
-        root.addView(flash, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-        ));
-
-        flash.animate()
-                .alpha(0.78f)
-                .setDuration(70L)
-                .withEndAction(() -> flash.animate()
-                        .alpha(0f)
-                        .setDuration(130L)
-                        .withEndAction(() -> root.removeView(flash))
-                        .start())
-                .start();
-    }
-
-    private String capitalize(String value) {
-        if (value == null || value.isEmpty()) return "Unknown rarity";
-        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
-    }
-
     @Override
     public void onRecognitionFailed(String reason) {
-        // Rapid scan mode stays visually stable. Normal missed frames are silent.
+        // Normal missed frames stay silent so the scan screen does not flicker with text.
     }
 
     @Override
