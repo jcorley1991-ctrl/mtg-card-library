@@ -30,11 +30,30 @@ public final class CardCropper {
     }
 
     public static Bitmap metadataRegion(Bitmap card) {
-        int left = Math.round(card.getWidth() * 0.02f);
-        int right = Math.round(card.getWidth() * 0.98f);
-        int top = Math.round(card.getHeight() * 0.78f);
-        int bottom = Math.round(card.getHeight() * 0.99f);
-        return Bitmap.createBitmap(card, left, top, right - left, bottom - top);
+        int left = Math.round(card.getWidth() * 0.01f);
+        int right = Math.round(card.getWidth() * 0.99f);
+        int top = Math.round(card.getHeight() * 0.70f);
+        int bottom = Math.round(card.getHeight() * 0.995f);
+        Bitmap crop = Bitmap.createBitmap(card, left, top, right - left, bottom - top);
+
+        // Collector/set text is tiny. Upscale only this strip so ML Kit gets more
+        // pixels without paying the cost of enlarging the entire camera frame.
+        int targetWidth = Math.min(1800, Math.max(crop.getWidth(), crop.getWidth() * 2));
+        if (targetWidth <= crop.getWidth()) return crop;
+        int targetHeight = Math.max(1, Math.round(crop.getHeight() * (targetWidth / (float) crop.getWidth())));
+        return Bitmap.createScaledBitmap(crop, targetWidth, targetHeight, true);
+    }
+
+    public static Bitmap nameRegion(Bitmap card) {
+        int left = Math.round(card.getWidth() * 0.03f);
+        int right = Math.round(card.getWidth() * 0.97f);
+        int top = Math.round(card.getHeight() * 0.02f);
+        int bottom = Math.round(card.getHeight() * 0.18f);
+        Bitmap crop = Bitmap.createBitmap(card, left, top, right - left, bottom - top);
+        int targetWidth = Math.min(1400, Math.max(crop.getWidth(), crop.getWidth() * 2));
+        if (targetWidth <= crop.getWidth()) return crop;
+        int targetHeight = Math.max(1, Math.round(crop.getHeight() * (targetWidth / (float) crop.getWidth())));
+        return Bitmap.createScaledBitmap(crop, targetWidth, targetHeight, true);
     }
 
     public static Bitmap artworkRegion(Bitmap card) {
