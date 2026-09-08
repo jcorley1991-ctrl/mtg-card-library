@@ -29,6 +29,14 @@ public final class CardCropper {
         return Bitmap.createBitmap(frame, left, top, Math.min(cropW, frameW - left), Math.min(cropH, frameH - top));
     }
 
+    public static Bitmap metadataRegion(Bitmap card) {
+        int left = Math.round(card.getWidth() * 0.02f);
+        int right = Math.round(card.getWidth() * 0.98f);
+        int top = Math.round(card.getHeight() * 0.78f);
+        int bottom = Math.round(card.getHeight() * 0.99f);
+        return Bitmap.createBitmap(card, left, top, right - left, bottom - top);
+    }
+
     public static Bitmap artworkRegion(Bitmap card) {
         int left = Math.round(card.getWidth() * 0.06f);
         int right = Math.round(card.getWidth() * 0.94f);
