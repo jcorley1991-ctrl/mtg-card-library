@@ -14,7 +14,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MtgCardAnalyzer implements ImageAnalysis.Analyzer {
-    private static final long ANALYSIS_INTERVAL_MS = 180L;
+    private static final long ANALYSIS_INTERVAL_MS = 80L;
 
     public interface Listener {
         void onStatus(String message);
@@ -62,71 +62,66 @@ public class MtgCardAnalyzer implements ImageAnalysis.Analyzer {
         }
         imageProxy.close();
 
-        listener.onStatus("Reading card…");
-        InputImage input = InputImage.fromBitmap(centeredCard, 0);
-        recognizer.process(input)
+        Bitmap metadata = CardCropper.metadataRegion(centeredCard);
+        recognizer.process(InputImage.fromBitmap(metadata, 0))
+                .addOnSuccessListener(text -> {
+                    OcrCardData metadataOcr = OcrCardParser.parse(text.getText());
+                    if (metadataOcr.hasExactPrintingKeys()) {
+                        resolveCandidate(metadataOcr, centeredCard);
+                    } else {
+                        processFullCard(centeredCard);
+                    }
+                })
+                .addOnFailureListener(e -> processFullCard(centeredCard));
+    }
+
+    private void processFullCard(Bitmap centeredCard) {
+        recognizer.process(InputImage.fromBitmap(centeredCard, 0))
                 .addOnSuccessListener(text -> {
                     OcrCardData ocr = OcrCardParser.parse(text.getText());
                     if (ocr.nameCandidate == null && !ocr.hasExactPrintingKeys()) {
                         cardGapObserved = true;
                         busy.set(false);
-                        if (lastAcceptedIdentity != null) {
-                            listener.onStatus("Ready for next card");
-                        } else {
-                            listener.onRecognitionFailed("Hold steady. I need the card name or bottom printing line.");
-                        }
                         return;
                     }
-
-                    if (!cardGapObserved && appearsToBeLastCard(ocr)) {
-                        busy.set(false);
-                        listener.onStatus("Saved. Move to next card.");
-                        return;
-                    }
-
-                    if (ocr.hasExactPrintingKeys()) {
-                        listener.onStatus("Exact printing keys found. Verifying…");
-                    } else {
-                        listener.onStatus("Name found. Comparing artwork across printings…");
-                    }
-
-                    scryfallClient.resolve(ocr, centeredCard, new ScryfallClient.ResolveCallback() {
-                        @Override
-                        public void onResolved(ScryfallCard card, RecognitionConfidence confidence) {
-                            String identity = cardIdentity(card);
-                            boolean sameAsLast = identity.equals(lastAcceptedIdentity);
-                            boolean accept = !sameAsLast || cardGapObserved;
-                            busy.set(false);
-
-                            if (accept) {
-                                lastAcceptedIdentity = identity;
-                                lastAcceptedName = card.name;
-                                lastAcceptedSet = card.set;
-                                lastAcceptedCollector = card.collectorNumber;
-                                cardGapObserved = false;
-                                listener.onCardRecognized(card, confidence);
-                            }
-
-                            if (!accept) {
-                                listener.onStatus("Saved. Move to next card.");
-                            } else if (confidence == RecognitionConfidence.NAME_ONLY) {
-                                listener.onStatus("Saved card; printing is not verified yet. Move to next card.");
-                            } else {
-                                listener.onStatus("Saved: " + card.name + " • " + card.set.toUpperCase() + " #" + card.collectorNumber);
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(String reason) {
-                            busy.set(false);
-                            listener.onRecognitionFailed(reason);
-                        }
-                    });
+                    resolveCandidate(ocr, centeredCard);
                 })
                 .addOnFailureListener(e -> {
                     busy.set(false);
                     listener.onRecognitionFailed("Text recognition failed. Try better lighting.");
                 });
+    }
+
+    private void resolveCandidate(OcrCardData ocr, Bitmap centeredCard) {
+        if (!cardGapObserved && appearsToBeLastCard(ocr)) {
+            busy.set(false);
+            return;
+        }
+
+        scryfallClient.resolve(ocr, centeredCard, new ScryfallClient.ResolveCallback() {
+            @Override
+            public void onResolved(ScryfallCard card, RecognitionConfidence confidence) {
+                String identity = cardIdentity(card);
+                boolean sameAsLast = identity.equals(lastAcceptedIdentity);
+                boolean accept = !sameAsLast || cardGapObserved;
+                busy.set(false);
+
+                if (accept) {
+                    lastAcceptedIdentity = identity;
+                    lastAcceptedName = card.name;
+                    lastAcceptedSet = card.set;
+                    lastAcceptedCollector = card.collectorNumber;
+                    cardGapObserved = false;
+                    listener.onCardRecognized(card, confidence);
+                }
+            }
+
+            @Override
+            public void onFailure(String reason) {
+                busy.set(false);
+                listener.onRecognitionFailed(reason);
+            }
+        });
     }
 
     private boolean appearsToBeLastCard(OcrCardData ocr) {
